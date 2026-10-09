@@ -1,481 +1,295 @@
 
+import streamlit as st
+import streamlit.components.v1 as components
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from xml.sax.saxutils import escape
 import io
 import math
-import streamlit as st
-from xml.sax.saxutils import escape
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import cm
 
 st.set_page_config(
-    page_title="AI Custom Clothing Pattern Generator",
+    page_title="AI Custom Clothing System",
     page_icon="👗",
-    layout="wide",
+    layout="wide"
 )
+
+GARMENTS = {
+    "Straight Kurti": "kurti",
+    "A-Line Kurti": "dress",
+    "Everyday Tunic": "tunic",
+    "Long Tunic": "tunic",
+    "Sleeveless Top": "top",
+    "Basic Blouse": "blouse",
+    "Shift Dress": "dress",
+    "Maxi Dress": "dress",
+    "Gathered Skirt": "skirt",
+    "Palazzo Trousers": "trousers",
+}
 
 st.title("👗 AI-Assisted Custom Clothing System")
-st.subheader("Straight Kurti — Measurement-Based Pattern Generator")
-
-st.warning(
-    "Prototype status: this generates dimensioned pattern outlines using "
-    "basic drafting assumptions. It has not been professionally validated "
-    "or test-fitted. Check all measurements and pattern geometry before "
-    "cutting fabric."
+st.write(
+    "Explore clothing recommendations using your measurements, "
+    "style preferences, fabric choice and occasion."
+)
+st.info(
+    "Project prototype: the illustrations and pattern diagrams are "
+    "basic visual previews, not production-ready sewing patterns."
 )
 
-st.markdown(
-    """
-    **How to use:** Enter body measurements in centimetres, choose ease
-    and allowances, and generate the front and back pattern previews.
-    The PDF is vector-based and intended to print at 100% scale.
-    """
-)
+st.header("1. Your preferences")
 
-# ---------------------------------------------------------
-# 1. BODY MEASUREMENTS
-# ---------------------------------------------------------
+col1, col2 = st.columns(2)
 
-st.header("1. Body measurements")
-
-c1, c2, c3 = st.columns(3)
-
-with c1:
-    bust = st.number_input(
-        "Bust circumference (cm)", 50.0, 180.0, 90.0, 1.0
+with col1:
+    age_group = st.selectbox(
+        "Age group",
+        ["Teen", "Young adult", "Adult", "Mature adult", "Senior adult"]
     )
-    waist = st.number_input(
-        "Waist circumference (cm)", 40.0, 170.0, 75.0, 1.0
+    garment = st.selectbox("Choose a garment", list(GARMENTS.keys()))
+    fit = st.selectbox(
+        "Preferred fit",
+        ["Comfortable", "Regular", "Fitted", "Loose"]
     )
-    hip = st.number_input(
-        "Hip circumference (cm)", 50.0, 190.0, 96.0, 1.0
+    fabric = st.selectbox(
+        "Preferred fabric",
+        ["Cotton", "Linen", "Rayon/Viscose", "Denim", "Silk", "Polyester", "Other"]
     )
 
-with c2:
-    shoulder = st.number_input(
-        "Shoulder length, neck to shoulder point (cm)",
-        5.0, 25.0, 12.0, 0.5
+with col2:
+    occasion = st.selectbox(
+        "Occasion",
+        ["Daily wear", "College", "Office", "Party", "Festive", "Formal"]
     )
-    armhole_depth = st.number_input(
-        "Armhole depth (cm)", 12.0, 45.0, 21.0, 0.5
+    colour = st.selectbox(
+        "Preferred colour",
+        ["Black", "White", "Pink", "Blue", "Green", "Red", "Purple", "Beige", "Other"]
     )
-    kurti_length = st.number_input(
-        "Shoulder-to-hem length (cm)", 40.0, 160.0, 90.0, 1.0
+    budget = st.selectbox(
+        "Budget",
+        ["Under Rs. 500", "Rs. 500–1000", "Rs. 1000–2000", "Above Rs. 2000"]
     )
-
-with c3:
-    neck_width = st.number_input(
-        "Neck width from centre (cm)", 4.0, 15.0, 7.5, 0.5
-    )
-    front_neck_depth = st.number_input(
-        "Front neck depth (cm)", 3.0, 30.0, 15.0, 0.5
-    )
-    back_neck_depth = st.number_input(
-        "Back neck depth (cm)", 1.0, 12.0, 3.0, 0.5
+    sleeve_style = st.selectbox(
+        "Sleeve preference",
+        ["Sleeveless", "Short sleeve", "Three-quarter sleeve", "Full sleeve"]
     )
 
-st.header("2. Fit and cutting settings")
-
-c4, c5, c6 = st.columns(3)
-
-with c4:
-    bust_ease = st.number_input(
-        "Total bust ease (cm)", 0.0, 20.0, 8.0, 0.5
-    )
-    waist_ease = st.number_input(
-        "Total waist ease (cm)", 0.0, 20.0, 8.0, 0.5
-    )
-    hip_ease = st.number_input(
-        "Total hip ease (cm)", 0.0, 20.0, 8.0, 0.5
-    )
-
-with c5:
-    seam_allowance = st.number_input(
-        "Seam allowance (cm)", 0.0, 3.0, 1.0, 0.25
-    )
-    hem_allowance = st.number_input(
-        "Hem allowance (cm)", 0.0, 8.0, 3.0, 0.5
-    )
-
-with c6:
-    fabric_width = st.selectbox(
-        "Fabric width",
-        ["110 cm", "140 cm", "150 cm"]
-    )
-    garment_style = st.selectbox(
-        "Kurti shape",
-        ["Straight", "Slight A-line"]
-    )
-
+st.header("2. Enter body measurements")
 st.caption(
-    "Shoulder length, armhole depth and neck dimensions are drafting inputs, "
-    "not values that can be reliably inferred from bust circumference alone."
+    "Enter measurements in centimetres. Use a measuring tape and "
+    "measure over light clothing. Ask someone to help for better accuracy."
 )
 
-# ---------------------------------------------------------
-# 2. DRAFTING GEOMETRY
-# ---------------------------------------------------------
+m1, m2, m3 = st.columns(3)
 
-def make_piece(piece_name, body_neck_depth):
-    """
-    Create a basic half-pattern outline with the centre placed on a fold.
+with m1:
+    bust = st.number_input("Bust (cm)", min_value=40.0, max_value=180.0, value=90.0, step=1.0)
+    waist = st.number_input("Waist (cm)", min_value=35.0, max_value=160.0, value=75.0, step=1.0)
+    hip = st.number_input("Hip (cm)", min_value=40.0, max_value=180.0, value=96.0, step=1.0)
 
-    Coordinates use centimetres with origin at the top-left.
-    The resulting outline is a prototype; curved seam allowances are
-    not generated by a validated offset-pattern algorithm.
-    """
+with m2:
+    shoulder = st.number_input("Shoulder width (cm)", min_value=20.0, max_value=65.0, value=38.0, step=1.0)
+    armhole = st.number_input("Armhole circumference (cm)", min_value=20.0, max_value=80.0, value=42.0, step=1.0)
+    garment_length = st.number_input("Garment length (cm)", min_value=20.0, max_value=180.0, value=90.0, step=1.0)
 
-    sa = seam_allowance
-    hem_sa = hem_allowance
+with m3:
+    sleeve_length = st.number_input("Sleeve length (cm)", min_value=0.0, max_value=90.0, value=20.0, step=1.0)
+    ease = st.number_input("Ease allowance (cm)", min_value=0.0, max_value=15.0, value=4.0, step=0.5)
+    seam = st.number_input("Seam allowance (cm)", min_value=0.0, max_value=3.0, value=1.0, step=0.5)
 
-    # Quarter body measurements plus allocated ease.
-    bust_width = (bust + bust_ease) / 4.0
-    waist_width = (waist + waist_ease) / 4.0
-    hip_width = (hip + hip_ease) / 4.0
+if st.button("✨ Generate my clothing recommendation", type="primary"):
+    st.session_state["generated"] = True
 
-    # Add side seam allowance to the cutting width.
-    bust_cut = bust_width + sa
-    waist_cut = waist_width + sa
-    hip_cut = hip_width + sa
+if st.session_state.get("generated", False):
+    st.header("3. Your clothing recommendation")
 
-    # Shoulder slope is an explicit drafting assumption.
-    shoulder_drop = 2.0
-    shoulder_x = neck_width + shoulder
-    shoulder_y = shoulder_drop
-
-    # The side seam is shaped between bust, waist, hip and hem.
-    waist_y = armhole_depth + (kurti_length - armhole_depth) * 0.42
-    hip_y = armhole_depth + (kurti_length - armhole_depth) * 0.72
-    hem_y = kurti_length + hem_sa
-
-    # Reject measurements that cannot make a sensible outline.
-    if kurti_length <= armhole_depth + 5:
-        raise ValueError(
-            "Kurti length must be greater than armhole depth by at least 5 cm."
-        )
-
-    if neck_width + shoulder >= bust_width:
-        raise ValueError(
-            "Shoulder endpoint is too far from the centre for the entered "
-            "bust measurement. Check shoulder length, neck width and bust."
-        )
-
-    # A slight A-line gradually increases the lower width.
-    if garment_style == "Slight A-line":
-        hip_cut += 2.0
-        hem_width = hip_cut + 2.0
+    if garment == "Palazzo Trousers":
+        recommended_fit = "A comfortable fit with room for movement."
+    elif fit == "Fitted":
+        recommended_fit = "A closer silhouette; ensure movement and comfort."
+    elif fit == "Loose":
+        recommended_fit = "A relaxed silhouette with extra room."
     else:
-        hem_width = hip_cut
+        recommended_fit = "A balanced silhouette for everyday comfort."
 
-    # Each outline is drawn from centre neck, across the shoulder,
-    # around the armhole and side seam, and back to the centre fold.
-    commands = [
-        ("M", 0.0, body_neck_depth),
-        ("C",
-         neck_width * 0.30, body_neck_depth * 0.95,
-         neck_width * 0.70, 0.15,
-         neck_width, 0.0),
-        ("L", shoulder_x, shoulder_y),
-
-        # Approximate armhole curve; this must be checked by fitting.
-        ("C",
-         shoulder_x + 1.0, armhole_depth * 0.32,
-         bust_cut * 0.92, armhole_depth * 0.72,
-         bust_cut, armhole_depth),
-
-        ("L", waist_cut, waist_y),
-        ("L", hip_cut, hip_y),
-        ("L", hem_width, hem_y),
-        ("L", 0.0, hem_y),
-        ("Z",),
-    ]
-
-    width = max(bust_cut, waist_cut, hip_cut, hem_width)
-    height = hem_y
-
-    return {
-        "name": piece_name,
-        "commands": commands,
-        "width": width,
-        "height": height,
-        "sa": sa,
-        "hem_sa": hem_sa,
-        "neck_depth": body_neck_depth,
+    recommendations = {
+        "Cotton": "Breathable and suitable for everyday clothing.",
+        "Linen": "Lightweight and airy, with a naturally textured appearance.",
+        "Rayon/Viscose": "Soft drape and fluid movement.",
+        "Denim": "Structured appearance; suitable for casual styles.",
+        "Silk": "Smooth appearance, often suited to occasion wear.",
+        "Polyester": "Often wrinkle-resistant and available in many finishes.",
+        "Other": "Choose a fabric based on drape, comfort and care requirements."
     }
 
+    st.success(f"Suggested style: {colour} {garment} for {occasion.lower()}.")
+    st.write(f"**Age group:** {age_group}")
+    st.write(f"**Fit:** {recommended_fit}")
+    st.write(f"**Fabric suggestion:** {recommendations[fabric]}")
+    st.write(f"**Sleeve preference:** {sleeve_style}")
+    st.write(f"**Budget:** {budget}")
 
-def svg_path(commands, scale=10.0, offset_x=0.0, offset_y=0.0):
-    """Convert centimetre coordinates to SVG millimetres."""
-    result = []
+    if age_group == "Teen":
+        st.write("Style idea: youthful details, comfortable shapes and playful colours.")
+    elif age_group == "Young adult":
+        st.write("Style idea: versatile designs that work for college, outings and occasions.")
+    elif age_group == "Adult":
+        st.write("Style idea: practical silhouettes that can be dressed up or down.")
+    elif age_group == "Mature adult":
+        st.write("Style idea: refined details, comfortable movement and a flattering silhouette.")
+    else:
+        st.write("Style idea: ease of dressing, comfortable movement and practical details.")
 
-    for cmd in commands:
-        letter = cmd[0]
-
-        if letter == "Z":
-            result.append("Z")
-        elif letter in ("M", "L"):
-            x, y = cmd[1], cmd[2]
-            result.append(
-                f"{letter} {x * scale + offset_x:.2f} "
-                f"{y * scale + offset_y:.2f}"
-            )
-        elif letter == "C":
-            x1, y1, x2, y2, x3, y3 = cmd[1:]
-            result.append(
-                "C "
-                f"{x1 * scale + offset_x:.2f} {y1 * scale + offset_y:.2f}, "
-                f"{x2 * scale + offset_x:.2f} {y2 * scale + offset_y:.2f}, "
-                f"{x3 * scale + offset_x:.2f} {y3 * scale + offset_y:.2f}"
-            )
-
-    return " ".join(result)
-
-
-def make_svg(piece):
-    """Create a full-scale SVG pattern sheet in millimetres."""
-
-    margin = 30.0  # mm around the pattern
-    w = piece["width"] * 10 + margin * 2
-    h = piece["height"] * 10 + margin * 2
-
-    path_data = svg_path(
-        piece["commands"],
-        scale=10,
-        offset_x=margin,
-        offset_y=margin,
+    st.caption(
+        "These suggestions use simple rules in this prototype. They are not "
+        "generated by a trained AI model."
     )
 
-    fold_x = margin
-    grain_x = margin + piece["width"] * 5
-    grain_top = margin + 50
-    grain_bottom = margin + piece["height"] * 10 - 50
+    st.header("4. Garment illustration")
 
-    return f"""<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="{w}mm" height="{h}mm"
-     viewBox="0 0 {w} {h}">
-  <rect width="100%" height="100%" fill="white"/>
-  <text x="{margin}" y="15" font-size="5" fill="black">
-    {escape(piece["name"])} - STRAIGHT KURTI
-  </text>
-  <path d="{path_data}" fill="none" stroke="black" stroke-width="0.5"/>
-  <line x1="{fold_x}" y1="{margin}"
-        x2="{fold_x}" y2="{margin + piece['height'] * 10}"
-        stroke="#2471A3" stroke-width="0.4" stroke-dasharray="3 2"/>
-  <text x="{fold_x + 2}" y="{margin + 20}"
-        font-size="4" fill="#2471A3">CENTRE FOLD</text>
-  <line x1="{grain_x}" y1="{grain_top}"
-        x2="{grain_x}" y2="{grain_bottom}"
-        stroke="#2471A3" stroke-width="0.5"/>
-  <path d="M {grain_x-2} {grain_top+5}
-           L {grain_x} {grain_top}
-           L {grain_x+2} {grain_top+5}"
-        fill="none" stroke="#2471A3" stroke-width="0.5"/>
-  <text x="{grain_x+3}" y="{grain_top+5}"
-        font-size="4" fill="#2471A3">GRAINLINE</text>
-  <text x="{margin}" y="{h-15}" font-size="4" fill="black">
-    Width approx. {piece['width']:.1f} cm; length {piece['height']:.1f} cm
-  </text>
-  <text x="{margin}" y="{h-8}" font-size="4" fill="#A93226">
-    Prototype only - verify before cutting
-  </text>
-  <rect x="{w-130}" y="{h-130}" width="100" height="100"
-        fill="none" stroke="black" stroke-width="0.5"/>
-  <text x="{w-130}" y="{h-135}" font-size="4" fill="black">
-    Scale check: 10 x 10 cm
-  </text>
-</svg>"""
+    def garment_svg(kind, colour_name):
+        colour_map = {
+            "Black": "#222222", "White": "#F5F5F5", "Pink": "#E9A3B8",
+            "Blue": "#6799D0", "Green": "#6C9B72", "Red": "#D74A55",
+            "Purple": "#9877C4", "Beige": "#D8C2A0", "Other": "#9AA0A6"
+        }
+        fill = colour_map.get(colour_name, "#6799D0")
+        stroke = "#333333"
 
+        if kind in ["kurti", "dress", "tunic", "blouse", "top"]:
+            if kind == "top" or kind == "blouse":
+                path = "M100 70 L135 45 L160 65 L180 45 L215 70 L200 115 L185 105 L185 170 L130 170 L130 105 L115 115 Z"
+            elif kind == "tunic":
+                path = "M100 70 L135 45 L160 65 L180 45 L215 70 L200 115 L185 105 L205 270 L110 270 L130 105 L115 115 Z"
+            else:
+                path = "M100 70 L135 45 L160 65 L180 45 L215 70 L200 115 L185 105 L220 320 L95 320 L130 105 L115 115 Z"
 
-# ---------------------------------------------------------
-# 3. PDF CREATION
-# ---------------------------------------------------------
+            return f'''<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360" viewBox="0 0 320 360">
+            <rect width="320" height="360" rx="18" fill="#FAF7F2"/>
+            <text x="160" y="28" font-size="14" text-anchor="middle" fill="#444">{escape(kind.title())} concept</text>
+            <path d="{path}" transform="translate(0,8)" fill="{fill}" stroke="{stroke}" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M160 66 L160 300" stroke="{stroke}" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+            <circle cx="160" cy="85" r="3" fill="{stroke}"/>
+            <text x="160" y="345" font-size="11" text-anchor="middle" fill="#555">Illustrative concept only</text>
+            </svg>'''
 
-def draw_pdf_path(pdf, commands, x_offset, y_offset, height):
-    """
-    Draw a path using centimetre coordinates.
-    SVG-style y-down coordinates are converted to PDF y-up coordinates.
-    """
-    p = pdf.beginPath()
+        if kind == "skirt":
+            path = "M105 65 L215 65 L245 290 L75 290 Z"
+        else:
+            path = "M105 65 L140 65 L145 155 L135 310 L100 310 L110 160 L105 160 L95 310 L60 310 L65 155 Z"
 
-    for cmd in commands:
-        letter = cmd[0]
+        return f'''<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360" viewBox="0 0 320 360">
+        <rect width="320" height="360" rx="18" fill="#FAF7F2"/>
+        <text x="160" y="28" font-size="14" text-anchor="middle" fill="#444">{escape(kind.title())} concept</text>
+        <path d="{path}" transform="translate(30,8)" fill="{fill}" stroke="{stroke}" stroke-width="2" stroke-linejoin="round"/>
+        <text x="160" y="345" font-size="11" text-anchor="middle" fill="#555">Illustrative concept only</text>
+        </svg>'''
 
-        if letter == "M":
-            x, y = cmd[1], cmd[2]
-            p.moveTo(x_offset + x * cm, y_offset + (height - y) * cm)
-        elif letter == "L":
-            x, y = cmd[1], cmd[2]
-            p.lineTo(x_offset + x * cm, y_offset + (height - y) * cm)
-        elif letter == "C":
-            x1, y1, x2, y2, x3, y3 = cmd[1:]
-            p.curveTo(
-                x_offset + x1 * cm, y_offset + (height - y1) * cm,
-                x_offset + x2 * cm, y_offset + (height - y2) * cm,
-                x_offset + x3 * cm, y_offset + (height - y3) * cm,
-            )
-        elif letter == "Z":
-            p.close()
-
-    pdf.drawPath(p, stroke=1, fill=0)
-
-
-def make_pdf(pieces):
-    """
-    Full-scale vector PDF. Each piece occupies a custom-size page.
-    Large pieces may require a large-format printer.
-    """
-    output = io.BytesIO()
-    pdf = canvas.Canvas(output)
-
-    for piece in pieces:
-        margin_cm = 3.0
-        page_w = (piece["width"] + 2 * margin_cm) * cm
-        page_h = (piece["height"] + 2 * margin_cm + 2) * cm
-
-        pdf.setPageSize((page_w, page_h))
-        pdf.setTitle("Straight Kurti Pattern Prototype")
-
-        pdf.setFont("Helvetica-Bold", 12)
-        pdf.drawString(
-            margin_cm * cm,
-            page_h - 1.2 * cm,
-            piece["name"] + " - Straight Kurti"
-        )
-
-        draw_pdf_path(
-            pdf,
-            piece["commands"],
-            margin_cm * cm,
-            margin_cm * cm,
-            piece["height"],
-        )
-
-        # Centre-fold reference line
-        pdf.saveState()
-        pdf.setDash(3, 2)
-        pdf.setStrokeColorRGB(0.14, 0.44, 0.64)
-        pdf.line(
-            margin_cm * cm,
-            margin_cm * cm,
-            margin_cm * cm,
-            (margin_cm + piece["height"]) * cm,
-        )
-        pdf.restoreState()
-
-        pdf.setFont("Helvetica", 8)
-        pdf.drawString(
-            margin_cm * cm,
-            0.8 * cm,
-            "Prototype outline. Verify fit, seam allowances and scale before cutting."
-        )
-
-        # 10 cm scale-check square
-        square_x = page_w - 13 * cm
-        square_y = 1.5 * cm
-        pdf.rect(square_x, square_y, 10 * cm, 10 * cm)
-        pdf.setFont("Helvetica", 7)
-        pdf.drawString(square_x, square_y - 0.3 * cm, "Must measure 10 x 10 cm")
-
-        pdf.showPage()
-
-    pdf.save()
-    output.seek(0)
-    return output.getvalue()
-
-
-# ---------------------------------------------------------
-# 4. VALIDATION AND DOWNLOADS
-# ---------------------------------------------------------
-
-st.header("3. Generate pattern")
-
-st.markdown(
-    """
-    The generator drafts half-pattern outlines intended to be placed on a
-    fabric fold. Check that the actual fabric fold is used only where the
-    design calls for it. The output is not yet a verified cutting pattern.
-    """
-)
-
-if st.button("Generate straight-kurti pattern", type="primary"):
-    try:
-        if waist > bust * 1.5 or hip > bust * 1.7:
-            st.warning(
-                "These proportions are unusual for this basic draft. "
-                "Double-check your measurements before proceeding."
-            )
-
-        front = make_piece("FRONT - CUT ON FOLD", front_neck_depth)
-        back = make_piece("BACK - CUT ON FOLD", back_neck_depth)
-
-        pieces = [front, back]
-        svgs = {piece["name"]: make_svg(piece) for piece in pieces}
-        pdf_data = make_pdf(pieces)
-
-        st.session_state["kurti_svgs"] = svgs
-        st.session_state["kurti_pdf"] = pdf_data
-        st.session_state["kurti_pieces"] = pieces
-
-        st.success("Pattern previews generated.")
-
-    except ValueError as error:
-        st.error(str(error))
-
-
-if "kurti_svgs" in st.session_state:
-    st.header("4. Preview and download")
-
-    for piece_name, svg in st.session_state["kurti_svgs"].items():
-        st.subheader(piece_name)
-
-        st.components.v1.html(
-            svg,
-            height=600,
-            scrolling=True,
-        )
-
-        safe_name = (
-            piece_name.lower()
-            .replace(" ", "_")
-            .replace("-", "")
-        )
-
-        st.download_button(
-            f"Download {piece_name} (SVG)",
-            data=svg.encode("utf-8"),
-            file_name=f"{safe_name}.svg",
-            mime="image/svg+xml",
-            key=f"download_{safe_name}",
-        )
+    illustration = garment_svg(GARMENTS[garment], colour)
+    components.html(illustration, height=380)
 
     st.download_button(
-        "Download complete pattern PDF",
-        data=st.session_state["kurti_pdf"],
-        file_name="straight_kurti_pattern_prototype.pdf",
-        mime="application/pdf",
+        "Download garment illustration (SVG)",
+        data=illustration.encode("utf-8"),
+        file_name="garment_illustration.svg",
+        mime="image/svg+xml"
     )
 
-    st.header("5. Pattern and print checks")
+    st.header("5. Basic pattern preview")
 
-    st.markdown(
-        """
-        - Print the PDF at **100% / Actual Size**, never "Fit to page".
-        - Measure the 10 x 10 cm reference square with a ruler.
-        - Check the garment length and widths against the entered measurements.
-        - Make a test garment in inexpensive fabric and assess fit before using
-          the final fabric.
-        """
+    # Simplified rectangular pattern blocks, not production-ready patterns.
+    body_measurement = bust if garment not in ["Palazzo Trousers", "Gathered Skirt"] else hip
+    width_cm = max(10.0, (body_measurement + ease) / 4.0)
+    length_cm = garment_length
+    scale = 3.0
+    width_px = width_cm * scale
+    length_px = length_cm * scale
+    canvas_width = max(300, int(width_px + 100))
+    canvas_height = max(300, int(length_px + 120))
+
+    pattern = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{canvas_width}" height="{canvas_height}" viewBox="0 0 {canvas_width} {canvas_height}">
+    <rect width="100%" height="100%" fill="#FAF7F2"/>
+    <text x="{canvas_width/2}" y="28" text-anchor="middle" font-size="15" fill="#333">{escape(garment)} — basic block preview</text>
+    <rect x="50" y="55" width="{width_px}" height="{length_px}" fill="#DCE8F4" stroke="#365D83" stroke-width="2"/>
+    <line x1="{50 + width_px/2}" y1="65" x2="{50 + width_px/2}" y2="{55 + length_px - 10}" stroke="#365D83" stroke-dasharray="5 5"/>
+    <path d="M{50 + width_px/2 - 5} 80 L{50 + width_px/2} 65 L{50 + width_px/2 + 5} 80" fill="none" stroke="#365D83" stroke-width="2"/>
+    <text x="{50 + width_px/2}" y="{55 + length_px + 22}" text-anchor="middle" font-size="12" fill="#333">Width: {width_cm:.1f} cm (approx.)</text>
+    <text x="{50 + width_px + 12}" y="{55 + length_px/2}" font-size="12" fill="#333" transform="rotate(90 {50 + width_px + 12} {55 + length_px/2})">Length: {length_cm:.1f} cm</text>
+    <text x="{canvas_width/2}" y="{canvas_height - 15}" text-anchor="middle" font-size="11" fill="#8B3030">Schematic only — not for fabric cutting</text>
+    </svg>'''
+
+    components.html(pattern, height=min(canvas_height + 20, 750), scrolling=True)
+
+    st.download_button(
+        "Download pattern preview (SVG)",
+        data=pattern.encode("utf-8"),
+        file_name="basic_pattern_preview.svg",
+        mime="image/svg+xml"
     )
 
-    st.error(
-        "Not yet production-ready: this prototype does not calculate a true "
-        "geometric seam-allowance offset around the neckline and armhole. "
-        "The sleeve, facing, slit, side-opening, dart and closure patterns are "
-        "also not drafted. The drawn outline must not be treated as a validated "
-        "fabric-cutting template."
+    st.warning(
+        "Important: this pattern is only a simple measurement-based block. "
+        "It does not yet include validated armholes, necklines, darts, sleeves, "
+        "crotch curves, closures or correctly offset seam allowances. "
+        "Do not use it to cut fabric."
+    )
+
+    st.header("6. Download your measurement report")
+
+    report_data = {
+        "Age group": age_group,
+        "Garment": garment,
+        "Fit": fit,
+        "Fabric": fabric,
+        "Occasion": occasion,
+        "Colour": colour,
+        "Sleeve preference": sleeve_style,
+        "Budget": budget,
+        "Bust": f"{bust} cm",
+        "Waist": f"{waist} cm",
+        "Hip": f"{hip} cm",
+        "Shoulder width": f"{shoulder} cm",
+        "Armhole circumference": f"{armhole} cm",
+        "Garment length": f"{garment_length} cm",
+        "Sleeve length": f"{sleeve_length} cm",
+        "Ease allowance": f"{ease} cm",
+        "Intended seam allowance": f"{seam} cm",
+    }
+
+    pdf_buffer = io.BytesIO()
+    pdf = canvas.Canvas(pdf_buffer, pagesize=A4)
+    page_width, page_height = A4
+
+    pdf.setTitle("Custom Clothing Measurement Report")
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(40, page_height - 50, "Custom Clothing Measurement Report")
+
+    y = page_height - 85
+    pdf.setFont("Helvetica", 10)
+
+    for key, value in report_data.items():
+        line = f"{key}: {str(value)[:100]}".replace("₹", "Rs. ")
+        pdf.drawString(40, y, line)
+        y -= 19
+
+        if y < 65:
+            pdf.showPage()
+            pdf.setFont("Helvetica", 10)
+            y = page_height - 50
+
+    pdf.setFont("Helvetica-Oblique", 9)
+    pdf.drawString(40, 40, "Prototype report. Verify all patterns with a qualified pattern maker.")
+    pdf.save()
+    pdf_buffer.seek(0)
+
+    st.download_button(
+        "Download PDF report",
+        data=pdf_buffer.getvalue(),
+        file_name="custom_clothing_report.pdf",
+        mime="application/pdf"
     )
 
 st.divider()
 st.caption(
-    "Future upgrade: validated pattern blocks, true seam-allowance offsets, "
-    "sleeve and facing pieces, tiled A4 printing, and fit-tested grading."
+    "Future development: accurate garment-specific drafting, validated pattern "
+    "shapes, image generation and a trained recommendation model."
 )
